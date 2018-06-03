@@ -17,54 +17,52 @@ func main() {
 	}
 	bot.Init()
 
-	// Only listen for private messages
+	// We're only listening for private messages.
 	queue, err := bot.RegisterPrivate()
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	// Don't register the stop func because there's no intent to stop
+	// Don't register the stop func because we intend to run forever.
 	messages, _ := queue.EventsChan()
 
 	stream := "alumni-checkins"
 
 	for m := range messages {
-		// Ignore the messages we see that are from us.
+		// Ignore the messages we see that are from us, otherwise we'll respond to ourselves.
 		if m.SenderEmail == bot.Email {
 			continue
 		}
 
-		// send message to stream if we haven't already
+		// If the message we received is the same message we intend to send, don't send it.
+		// This is a second check like the one above to ensure we don't respond indefinitely.
 		topic := getTodaysTopic()
-
-		// If this is the message we intend to send, don't respond to it.
-		// This is a second check like the above check to ensure we don't
-		// respond indefinitely.
 		if m.Content == makeTopicLocationMessage(stream, topic) {
 			continue
 		}
 
-		// If the topic is new, send the message and create the stream
-		// otherwise we've already done this so just respond to the person
+		// TODO: Based on github issue #1, update this to use an api call to see if a topic exists.
+		// That will likely require changes to the bot library, gozulipbot.
+
+		// If the topic is new, send the message and create the stream.
+		// Otherwise we've already done this so just respond to the person.
 		if topic != currentTopicCache {
-			// Send the message to the new stream topic
+			// Send the message to the new stream topic.
 			newMessage := gozulipbot.Message{
 				Stream:  stream,
 				Topic:   topic,
 				Content: "Welcome to daily [checkins](https://github.com/ifo/alum-bot)!",
 			}
 			_, err := bot.Message(newMessage)
+			// Always update the topic cache to enable our second don't-infinitely-respond check above.
+			currentTopicCache = topic
 			if err != nil {
 				m.Queue.Bot.Respond(m, "There was an error, sorry. The topic string should be: "+topic)
-				// Ensure the cache is updated so we can't infinitely hit this code path
-				currentTopicCache = topic
 				continue
 			}
-			// Update the cache to today
-			currentTopicCache = topic
 		}
 
-		// Respond to the DM
+		// Respond to the DM.
 		responseMessage := makeTopicLocationMessage(stream, topic)
 		m.Queue.Bot.Respond(m, responseMessage)
 	}
@@ -92,7 +90,7 @@ func makeTopicLocationMessage(stream, topic string) string {
 }
 
 func zulipTopicUrlFormatting(topic string) string {
-	// Periods must be done first, otherwise we'll start replacing our replacements
+	// Periods must be replaced first, otherwise we'll start replacing our replacements.
 	periods := strings.Replace(topic, ".", ".2E", -1)
 	spaces := strings.Replace(periods, " ", ".20", -1)
 	commas := strings.Replace(spaces, ",", ".2C", -1)
